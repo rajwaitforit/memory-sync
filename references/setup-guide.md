@@ -1,94 +1,63 @@
 # Setup Guide
 
+## Prerequisites
+
+- OpenClaw 2026.2.x or later
+- At least two channels configured (Discord, Telegram, webchat, etc.)
+- A cron-compatible model configured (any cheap model works)
+
 ## Quick Setup
 
-### 1. Install the Skill
-
-Copy the `memory-sync/` folder into your OpenClaw skills directory:
+### 1. Install the skill
 
 ```bash
-cp -r memory-sync/ ~/.openclaw/workspace/skills/memory-sync/
+# Into workspace skills (single agent)
+git clone https://github.com/rajwaitforit/memory-sync.git ~/.openclaw/workspace/skills/memory-sync
+
+# Or into managed skills (shared across all agents)
+git clone https://github.com/rajwaitforit/memory-sync.git ~/.openclaw/skills/memory-sync
 ```
 
-Or use the OpenClaw CLI:
+### 2. Add the cron job
 
-```bash
-openclaw skill install memory-sync
-```
+Via OpenClaw cron tool or CLI. The job should:
+- Run every 2 hours (`0 */2 * * *`)
+- Use an isolated session (`sessionTarget: isolated`)
+- Use a cheap model for token efficiency
+- Read SKILL.md and execute the auto-sync workflow
 
-### 2. Add the Cron Job
+### 3. Add agent instructions to AGENTS.md
 
-Add to your OpenClaw config (`~/.openclaw/config.yaml` or via the dashboard):
+Copy the "Immediate Write Rule" and "Channel Handoff Awareness" sections from SKILL.md into your workspace's AGENTS.md.
 
-```yaml
-cron:
-  - label: memory-sync
-    schedule: "0 */2 * * *"
-    prompt: |
-      Read the memory-sync skill. Run the auto-sync workflow:
-      1. List all active sessions via sessions_list
-      2. For each session with recent activity, read history via sessions_history
-      3. Extract: decisions, tasks, preferences, personal info, action items
-      4. Write consolidated context to memory/YYYY-MM-DD.md
-      5. If significant long-term info found, update MEMORY.md
-    sessionTarget: isolated
-    agentTurn: true
-    model: google/gemini-2.0-flash-001
-```
-
-#### Customizing the Schedule
-
-| Schedule | Cron Expression | Best For |
-|----------|----------------|----------|
-| Every 2 hours | `0 */2 * * *` | Default — good balance |
-| Every hour | `0 * * * *` | Heavy multi-channel use |
-| Every 4 hours | `0 */4 * * *` | Light use, save tokens |
-| 3x daily | `0 8,14,20 * * *` | Structured schedule |
-
-#### Choosing a Model
-
-The sync job is read-heavy and doesn't need advanced reasoning. Recommended models:
-
-- `google/gemini-2.0-flash-001` — Fast, cheap, good at extraction
-- `openai/gpt-4o-mini` — Reliable alternative
-- `anthropic/claude-3-haiku` — Good at summarization
-
-### 3. Update AGENTS.md
-
-Add the Immediate Write Rule and Channel Handoff Awareness sections from the SKILL.md
-to your workspace's AGENTS.md. These ensure context is captured at the source and
-retrieved on channel switches.
-
-### 4. Create Memory Directory
+### 4. Create memory directory
 
 ```bash
 mkdir -p ~/.openclaw/workspace/memory
 ```
 
-The skill will create daily files automatically, but the directory must exist.
-
-## Verification
-
-After setup, test the sync:
-
-1. Say something memorable on one channel (e.g., "I'm working on Project Alpha")
-2. Wait for a sync cycle (or say "sync my memory")
-3. Switch to another channel and ask "what am I working on?"
-4. The agent should know about Project Alpha
-
 ## Troubleshooting
 
-**Sync not running?**
-- Check cron job is registered: `openclaw cron list`
-- Verify the model is available in your config
-- Check logs for errors
+### Sync not running
 
-**Context not crossing channels?**
-- Verify memory files exist: `ls ~/.openclaw/workspace/memory/`
-- Check AGENTS.md includes the memory-reading instructions
-- Ensure the agent reads daily memory files on session start
+- Verify the cron job exists: check your cron job list
+- Check that the model specified is available in your auth profiles
+- Review gateway logs for cron execution errors
 
-**Too many tokens used?**
-- Increase sync interval (every 4h instead of 2h)
-- Use a cheaper model
-- Reduce session scan window (last 2h instead of 4h)
+### Context not crossing channels
+
+- Confirm memory files exist in `~/.openclaw/workspace/memory/`
+- Verify your AGENTS.md includes instructions to read daily memory files on session start
+- Check that the sync job is writing to the correct path
+
+### High token usage
+
+- Increase the sync interval (every 4h instead of 2h)
+- Use a cheaper model (Gemini Flash, GPT-4o-mini, Haiku)
+- Reduce the session history scan depth
+
+### Duplicate entries in memory files
+
+- The sync workflow includes deduplication, but edge cases exist
+- If duplicates appear, the sync model may need a more explicit dedup prompt
+- Consider periodically cleaning memory files during heartbeat cycles
